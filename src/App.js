@@ -2,24 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue, set } from "firebase/database";
 import {
-  Package,
+  ShoppingCart,
+  History,
   Settings,
-  CheckCircle2,
-  Circle,
+  Wine,
+  Lock,
   Plus,
-  Trash2,
   Edit3,
+  Trash2,
   Save,
   X,
   Loader2,
-  ShoppingCart,
-  History,
-  Wine,
-  Lock,
-  ChevronRight
+  CheckCircle2,
+  Circle,
+  LogOut,
+  Bell
 } from 'lucide-react';
 
-// === YOUR FIREBASE CONFIG ===
+// === FIREBASE CONFIG ===
 const firebaseConfig = {
   apiKey: "AIzaSyDL7h0nWWE4YV_IMXO7_gupvf1QUZamHGU",
   authDomain: "bobbys-cafe.firebaseapp.com",
@@ -33,16 +33,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// === THEME CONFIGURATION ===
 const colors = {
-  primary: '#722F37',    // Wine/Merlot
-  secondary: '#F4EFE8',  // Cream/Off-White
-  accent: '#D4AF37',     // Gold
-  background: '#FDFBF7', // Light Cream Background
-  textDark: '#2D0D15',   // Deep Wine
-  textLight: '#F4EFE8',  // Cream
-  success: '#3A7D44',    // Green
-  danger: '#9E2A2B',     // Red
+  primary: '#722F37',
+  secondary: '#F4EFE8',
+  accent: '#D4AF37',
+  background: '#FDFBF7',
+  textDark: '#2D0D15',
+  success: '#3A7D44',
 };
 
 const ADMIN_PIN = "8923";
@@ -54,11 +51,11 @@ const CafeOrderingApp = () => {
   const [orderQuantities, setOrderQuantities] = useState({});
   const [loading, setLoading] = useState(true);
   
-  // Auth State
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [showPinError, setShowPinError] = useState(false);
 
+  // Sync Data
   useEffect(() => {
     const dataRef = ref(db, 'cafe_data');
     return onValue(dataRef, (snapshot) => {
@@ -67,8 +64,35 @@ const CafeOrderingApp = () => {
       setOrderHistory(data.history || {});
       setOrderQuantities(data.quantities || {});
       setLoading(false);
+      checkPendingOrders(data);
     });
   }, []);
+
+  // Browser Notification Logic
+  const requestNotificationPermission = () => {
+    if ("Notification" in window) {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          new Notification("Bobby's Admin", { body: "Reminders are now active!" });
+        }
+      });
+    }
+  };
+
+  const checkPendingOrders = (data) => {
+    const todayKey = `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${new Date().getDate()}`;
+    const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+    const todaysSuppliers = (data.suppliers || []).filter(s => s.days?.includes(dayName));
+    const completed = data.history?.[todayKey] || {};
+    
+    const pending = todaysSuppliers.filter(s => !completed[s.id]);
+
+    if (pending.length > 0 && Notification.permission === "granted") {
+      new Notification("Pending Orders", {
+        body: `You have ${pending.length} supplier orders to complete for today.`
+      });
+    }
+  };
 
   const handlePinSubmit = (digit) => {
     const newPin = pinInput + digit;
@@ -80,10 +104,7 @@ const CafeOrderingApp = () => {
           setPinInput("");
         } else {
           setShowPinError(true);
-          setTimeout(() => {
-            setPinInput("");
-            setShowPinError(false);
-          }, 600);
+          setTimeout(() => { setPinInput(""); setShowPinError(false); }, 600);
         }
       }
     }
@@ -109,9 +130,9 @@ const CafeOrderingApp = () => {
             <span className="text-3xl font-serif tracking-[0.2em] uppercase" style={{ color: colors.secondary }}>BOBBY'S</span>
             <div className="h-1 w-full rounded-full" style={{ backgroundColor: colors.accent }}></div>
           </div>
-          <div className="text-xs font-bold uppercase tracking-widest opacity-80" style={{ color: colors.secondary }}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}
-          </div>
+          <button onClick={requestNotificationPermission} className="p-2 rounded-full hover:bg-white/10">
+            <Bell className="w-5 h-5" style={{ color: colors.accent }} />
+          </button>
         </div>
       </header>
 
@@ -134,12 +155,15 @@ const CafeOrderingApp = () => {
                 ))}
               </div>
               <div className="grid grid-cols-3 gap-4">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "C"].map((btn, i) => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, "C", 0, "⌫"].map((btn, i) => (
                   <button
                     key={i}
-                    disabled={btn === ""}
-                    onClick={() => btn === "C" ? setPinInput("") : handlePinSubmit(btn)}
-                    className={`w-16 h-16 rounded-full text-xl font-bold transition-all active:scale-90 ${btn === "" ? 'opacity-0' : 'bg-white shadow-sm hover:bg-stone-100 border border-stone-100'}`}
+                    onClick={() => {
+                        if (btn === "C") setPinInput("");
+                        else if (btn === "⌫") setPinInput(pinInput.slice(0, -1));
+                        else handlePinSubmit(btn);
+                    }}
+                    className={`w-16 h-16 rounded-full text-xl font-bold transition-all active:scale-90 bg-white shadow-sm border border-stone-100`}
                   >
                     {btn}
                   </button>
@@ -147,7 +171,19 @@ const CafeOrderingApp = () => {
               </div>
             </div>
           ) : (
-            <AdminView suppliers={suppliers} onSave={(newList) => saveToFirebase('suppliers', newList)} />
+            <div className="animate-in fade-in duration-500">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="font-serif text-xl tracking-wide uppercase" style={{ color: colors.primary }}>Suppliers List</h2>
+                    <button 
+                        onClick={() => setIsAdminAuthenticated(false)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest text-red-600 hover:bg-red-50"
+                    >
+                        <LogOut className="w-4 h-4" />
+                        Logout
+                    </button>
+                </div>
+                <AdminView suppliers={suppliers} onSave={(newList) => saveToFirebase('suppliers', newList)} />
+            </div>
           )
         )}
       </main>
@@ -164,97 +200,97 @@ const CafeOrderingApp = () => {
   );
 };
 
-// Sub-components (OrdersView, HistoryView, AdminView, etc.)
+// ... (Sub-components: OrdersView, HistoryView, NavButton same as before) ...
 const NavButton = ({ icon: Icon, label, active, onClick }) => (
-  <button onClick={onClick} className="flex flex-col items-center justify-center p-2 min-w-[4rem] transition-all duration-300" style={{ color: active ? colors.primary : '#A08D93' }}>
-    <div className={`p-2 rounded-xl mb-1 ${active ? 'shadow-sm bg-white' : ''}`}>
-       <Icon className={`w-5 h-5 ${active ? 'fill-current' : ''}`} />
-    </div>
-    <span className="text-[9px] uppercase tracking-[0.2em] font-black">{label}</span>
-  </button>
+    <button onClick={onClick} className="flex flex-col items-center justify-center p-2 min-w-[4rem] transition-all duration-300" style={{ color: active ? colors.primary : '#A08D93' }}>
+      <div className={`p-2 rounded-xl mb-1 ${active ? 'shadow-sm bg-white' : ''}`}>
+         <Icon className={`w-5 h-5 ${active ? 'fill-current' : ''}`} />
+      </div>
+      <span className="text-[9px] uppercase tracking-[0.2em] font-black">{label}</span>
+    </button>
 );
 
 const OrdersView = ({ suppliers, history, quantities, onSave }) => {
-  const todayKey = `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${new Date().getDate()}`;
-  const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
-  const todaysSuppliers = suppliers.filter(s => s.days?.includes(dayName));
-
-  if (todaysSuppliers.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-20 opacity-30 text-center">
-      <Wine className="w-16 h-16 mb-4" />
-      <h2 className="text-xl font-serif uppercase tracking-widest">No Deliveries Today</h2>
-    </div>
-  );
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-      {todaysSuppliers.map(s => {
-        const isCompleted = history[todayKey]?.[s.id];
-        return (
-          <div key={s.id} className="rounded-2xl shadow-lg border overflow-hidden transition-all bg-white" style={{ borderColor: isCompleted ? colors.success : colors.primary + '20' }}>
-            <div className="p-5 flex justify-between items-center" style={{ backgroundColor: isCompleted ? colors.success + '10' : 'transparent' }}>
-              <div>
-                <h3 className="font-serif text-lg tracking-wider uppercase" style={{ color: colors.primary }}>{s.name}</h3>
-                <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">{s.items?.length || 0} Items</p>
-              </div>
-              <button onClick={() => {
-                const newHistory = { ...history };
-                if (!newHistory[todayKey]) newHistory[todayKey] = {};
-                newHistory[todayKey][s.id] = !newHistory[todayKey][s.id];
-                onSave('history', newHistory);
-              }} className="px-5 py-3 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-md" style={{ backgroundColor: isCompleted ? colors.success : colors.primary, color: 'white' }}>
-                {isCompleted ? 'Received' : 'Mark In'}
-              </button>
-            </div>
-            <div className="divide-y divide-stone-50">
-              {s.items?.map(item => (
-                <div key={item.id} className="p-4 flex items-center justify-between">
-                  <span className="font-bold text-xs uppercase tracking-wide opacity-80">{item.name} <span className="ml-2 text-[9px] opacity-40">Par: {item.par}</span></span>
-                  <input type="number" placeholder="0" className="w-16 h-10 text-center border rounded-lg font-serif text-lg outline-none bg-stone-50 focus:bg-white focus:border-amber-500" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
-                    const newQ = { ...quantities };
-                    if (!newQ[todayKey]) newQ[todayKey] = {};
-                    if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
-                    newQ[todayKey][s.id][item.id] = e.target.value;
-                    onSave('quantities', newQ);
-                  }} />
+    const todayKey = `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${new Date().getDate()}`;
+    const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+    const todaysSuppliers = suppliers.filter(s => s.days?.includes(dayName));
+  
+    if (todaysSuppliers.length === 0) return (
+      <div className="flex flex-col items-center justify-center py-20 opacity-30 text-center">
+        <Wine className="w-16 h-16 mb-4" />
+        <h2 className="text-xl font-serif uppercase tracking-widest">No Deliveries Today</h2>
+      </div>
+    );
+  
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+        {todaysSuppliers.map(s => {
+          const isCompleted = history[todayKey]?.[s.id];
+          return (
+            <div key={s.id} className="rounded-2xl shadow-lg border overflow-hidden transition-all bg-white" style={{ borderColor: isCompleted ? colors.success : colors.primary + '20' }}>
+              <div className="p-5 flex justify-between items-center" style={{ backgroundColor: isCompleted ? colors.success + '10' : 'transparent' }}>
+                <div>
+                  <h3 className="font-serif text-lg tracking-wider uppercase" style={{ color: colors.primary }}>{s.name}</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">{s.items?.length || 0} Items</p>
                 </div>
-              ))}
+                <button onClick={() => {
+                  const newHistory = { ...history };
+                  if (!newHistory[todayKey]) newHistory[todayKey] = {};
+                  newHistory[todayKey][s.id] = !newHistory[todayKey][s.id];
+                  onSave('history', newHistory);
+                }} className="px-5 py-3 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-md" style={{ backgroundColor: isCompleted ? colors.success : colors.primary, color: 'white' }}>
+                  {isCompleted ? 'Received' : 'Mark In'}
+                </button>
+              </div>
+              <div className="divide-y divide-stone-50">
+                {s.items?.map(item => (
+                  <div key={item.id} className="p-4 flex items-center justify-between">
+                    <span className="font-bold text-xs uppercase tracking-wide opacity-80">{item.name} <span className="ml-2 text-[9px] opacity-40">Par: {item.par}</span></span>
+                    <input type="number" placeholder="0" className="w-16 h-10 text-center border rounded-lg font-serif text-lg outline-none bg-stone-50 focus:bg-white focus:border-amber-500" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
+                      const newQ = { ...quantities };
+                      if (!newQ[todayKey]) newQ[todayKey] = {};
+                      if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
+                      newQ[todayKey][s.id][item.id] = e.target.value;
+                      onSave('quantities', newQ);
+                    }} />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+          );
+        })}
+      </div>
+    );
 };
 
 const HistoryView = ({ suppliers, history }) => {
-  const days = Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    return { key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }), dayName: d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() };
-  });
-
-  return (
-    <div className="rounded-xl shadow-xl border overflow-hidden bg-white">
-      <div className="p-4 border-b bg-stone-50"><h2 className="font-serif uppercase tracking-widest text-[10px] text-center">Compliance Record</h2></div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[10px]">
-          <thead><tr className="border-b">{['Supplier', ...days.map(d => d.label)].map(h => <th key={h} className="p-4 uppercase tracking-widest opacity-50">{h}</th>)}</tr></thead>
-          <tbody>
-            {suppliers.map(s => (
-              <tr key={s.id} className="border-b last:border-0">
-                <td className="p-4 font-bold uppercase">{s.name}</td>
-                {days.map(d => (
-                  <td key={d.key} className="p-4 text-center">
-                    {s.days?.includes(d.dayName) ? (history[d.key]?.[s.id] ? <CheckCircle2 className="w-4 h-4 mx-auto text-green-600" /> : <Circle className="w-4 h-4 mx-auto text-stone-200" />) : '-'}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    const days = Array.from({ length: 5 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      return { key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }), dayName: d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() };
+    });
+  
+    return (
+      <div className="rounded-xl shadow-xl border overflow-hidden bg-white">
+        <div className="p-4 border-b bg-stone-50"><h2 className="font-serif uppercase tracking-widest text-[10px] text-center">Compliance Record</h2></div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px]">
+            <thead><tr className="border-b">{['Supplier', ...days.map(d => d.label)].map(h => <th key={h} className="p-4 uppercase tracking-widest opacity-50">{h}</th>)}</tr></thead>
+            <tbody>
+              {suppliers.map(s => (
+                <tr key={s.id} className="border-b last:border-0">
+                  <td className="p-4 font-bold uppercase">{s.name}</td>
+                  {days.map(d => (
+                    <td key={d.key} className="p-4 text-center">
+                      {s.days?.includes(d.dayName) ? (history[d.key]?.[s.id] ? <CheckCircle2 className="w-4 h-4 mx-auto text-green-600" /> : <Circle className="w-4 h-4 mx-auto text-stone-200" />) : '-'}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-  );
+    );
 };
 
 const AdminView = ({ suppliers, onSave }) => {
@@ -272,9 +308,8 @@ const AdminView = ({ suppliers, onSave }) => {
   }} onCancel={() => setMode('list')} />;
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="font-serif text-lg uppercase tracking-widest">Cellar Management</h2>
+    <div className="space-y-4">
+      <div className="flex justify-end mb-4">
         <button onClick={() => startEdit(null)} className="p-3 bg-stone-900 text-white rounded-full shadow-lg active:scale-95"><Plus className="w-5 h-5" /></button>
       </div>
       {suppliers.map(s => (
