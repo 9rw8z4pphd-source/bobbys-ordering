@@ -13,10 +13,11 @@ import {
   Loader2,
   CheckCircle2,
   User,
-  Calendar,
   LogOut,
   RefreshCw,
-  ClipboardCheck
+  ClipboardCheck,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 // === FIREBASE CONFIG ===
@@ -143,108 +144,7 @@ const CafeOrderingApp = () => {
   );
 };
 
-const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSave }) => {
-  const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
-  const todaysSuppliers = suppliers.filter(s => s.days?.includes(dayName));
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white/40 p-4 rounded-3xl flex items-center justify-center gap-3 border border-stone-200">
-        <ClipboardCheck className="text-stone-400" size={16} />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500">Live Recording Mode</span>
-      </div>
-
-      {todaysSuppliers.map(s => {
-        const isCompleted = history[todayKey]?.[s.id];
-        return (
-          <div key={s.id} className="rounded-[40px] shadow-xl border-t-8 bg-white p-6 transition-all" style={{ borderColor: isCompleted ? colors.success : colors.primary }}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-serif text-stone-800">{s.name}</h3>
-              <button onClick={() => {
-                const newHistory = { ...history };
-                if (!newHistory[todayKey]) newHistory[todayKey] = {};
-                newHistory[todayKey][s.id] = isCompleted ? null : { done: true, by: staffName };
-                onSave('history', newHistory);
-              }} className="p-4 rounded-full shadow-lg transition-transform active:scale-90" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
-                <CheckCircle2 className={`w-6 h-6 ${isCompleted ? 'text-white' : 'text-stone-300'}`} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              {s.items?.map(item => (
-                <div key={item.id} className="flex items-center justify-between p-4 rounded-3xl bg-stone-50 border border-stone-100">
-                  <span className="font-bold text-xs text-stone-500 uppercase">{item.name}</span>
-                  <input type="number" className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
-                    const newQ = { ...quantities };
-                    if (!newQ[todayKey]) newQ[todayKey] = {};
-                    if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
-                    newQ[todayKey][s.id][item.id] = e.target.value;
-                    onSave('quantities', newQ);
-                  }} />
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-const HistoryView = ({ suppliers, history, quantities }) => {
-  const complianceDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() + (i - 3));
-    return { key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', { weekday: 'short' }), isToday: i === 3 };
-  });
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-[30px] bg-white p-6 shadow-xl text-center">
-        <h2 className="font-serif text-lg mb-4 italic text-stone-600">Compliance Tracking</h2>
-        <div className="flex justify-between px-2">
-          {complianceDays.map(d => {
-            const completedCount = Object.values(history[d.key] || {}).filter(v => v?.done).length;
-            return (
-              <div key={d.key} className="flex flex-col items-center gap-2">
-                <div className={`w-8 h-20 rounded-full relative overflow-hidden ${d.isToday ? 'ring-2 ring-amber-400 ring-offset-2' : ''}`} style={{ backgroundColor: '#F0F0F0' }}>
-                  <div className="absolute bottom-0 w-full rounded-full transition-all duration-700" style={{ height: `${completedCount * 33}%`, backgroundColor: colors.primary }}></div>
-                </div>
-                <span className={`text-[9px] font-black uppercase ${d.isToday ? 'text-amber-600' : 'text-stone-400'}`}>{d.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      
-      <div className="space-y-4">
-        {[...complianceDays].reverse().map(d => {
-            const dayData = quantities[d.key];
-            const dayMeta = history[d.key];
-            if (!dayData) return null;
-            return (
-                <div key={d.key} className="p-6 rounded-[30px] bg-white/60 border border-stone-200">
-                    <p className="font-black text-[10px] uppercase text-stone-400 mb-4 tracking-widest">{d.label} History</p>
-                    {Object.entries(dayData).map(([sId, items]) => (
-                        <div key={sId} className="mb-4 last:mb-0">
-                            <div className="flex justify-between items-center mb-2">
-                                <p className="text-[10px] font-black text-amber-600 uppercase">{suppliers.find(s => s.id === sId)?.name}</p>
-                                <span className="text-[9px] bg-white px-2 py-1 rounded-full border text-stone-400 font-bold">BY: {dayMeta?.[sId]?.by || 'System'}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                {Object.entries(items).map(([itemId, qty]) => (
-                                    <span key={itemId} className="px-3 py-1 bg-white rounded-full text-[10px] font-bold shadow-sm border border-stone-100">{suppliers.find(s => s.id === sId)?.items.find(i => i.id.toString() === itemId)?.name}: {qty}</span>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            );
-        })}
-      </div>
-    </div>
-  );
-};
-
-// ... NavButton, AdminView, SupplierForm, PinPad components stay as before, just minus share logic ...
+// ... NavButton, PinPad remain the same ...
 const NavButton = ({ icon: Icon, active, onClick }) => (
     <button onClick={onClick} className={`p-4 rounded-full transition-all duration-500 ${active ? 'shadow-inner' : ''}`}
             style={{ backgroundColor: active ? colors.primary : 'transparent', color: active ? '#fff' : colors.primary }}>
@@ -280,6 +180,101 @@ const PinPad = ({ pinInput, setPinInput, onAuth }) => {
     );
 };
 
+// ... OrdersView & HistoryView remain the same as previous (no WhatsApp version) ...
+const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSave }) => {
+  const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+  const todaysSuppliers = suppliers.filter(s => s.days?.includes(dayName));
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white/40 p-4 rounded-3xl flex items-center justify-center gap-3 border border-stone-200">
+        <ClipboardCheck className="text-stone-400" size={16} />
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500">Inventory Mode</span>
+      </div>
+      {todaysSuppliers.map(s => {
+        const isCompleted = history[todayKey]?.[s.id];
+        return (
+          <div key={s.id} className="rounded-[40px] shadow-xl border-t-8 bg-white p-6" style={{ borderColor: isCompleted ? colors.success : colors.primary }}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-serif text-stone-800">{s.name}</h3>
+              <button onClick={() => {
+                const newHistory = { ...history };
+                if (!newHistory[todayKey]) newHistory[todayKey] = {};
+                newHistory[todayKey][s.id] = isCompleted ? null : { done: true, by: staffName };
+                onSave('history', newHistory);
+              }} className="p-4 rounded-full shadow-lg" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
+                <CheckCircle2 className={`w-6 h-6 ${isCompleted ? 'text-white' : 'text-stone-300'}`} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {s.items?.map(item => (
+                <div key={item.id} className="flex items-center justify-between p-4 rounded-3xl bg-stone-50 border border-stone-100">
+                  <span className="font-bold text-xs text-stone-500 uppercase">{item.name}</span>
+                  <input type="number" className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
+                    const newQ = { ...quantities };
+                    if (!newQ[todayKey]) newQ[todayKey] = {};
+                    if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
+                    newQ[todayKey][s.id][item.id] = e.target.value;
+                    onSave('quantities', newQ);
+                  }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const HistoryView = ({ suppliers, history, quantities }) => {
+  const complianceDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + (i - 3));
+    return { key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', { weekday: 'short' }), isToday: i === 3 };
+  });
+  return (
+    <div className="space-y-6">
+      <div className="rounded-[30px] bg-white p-6 shadow-xl text-center">
+        <h2 className="font-serif text-lg mb-4 italic text-stone-600">Compliance Tracking</h2>
+        <div className="flex justify-between px-2">
+          {complianceDays.map(d => {
+            const completedCount = Object.values(history[d.key] || {}).filter(v => v?.done).length;
+            return (
+              <div key={d.key} className="flex flex-col items-center gap-2">
+                <div className={`w-8 h-20 rounded-full relative overflow-hidden ${d.isToday ? 'ring-2 ring-amber-400 ring-offset-2' : ''}`} style={{ backgroundColor: '#F0F0F0' }}>
+                  <div className="absolute bottom-0 w-full rounded-full transition-all duration-700" style={{ height: `${completedCount * 33}%`, backgroundColor: colors.primary }}></div>
+                </div>
+                <span className={`text-[9px] font-black uppercase ${d.isToday ? 'text-amber-600' : 'text-stone-400'}`}>{d.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="space-y-4">
+        {[...complianceDays].reverse().map(d => {
+            const dayData = quantities[d.key];
+            if (!dayData) return null;
+            return (
+                <div key={d.key} className="p-6 rounded-[30px] bg-white/60 border border-stone-200">
+                    <p className="font-black text-[10px] uppercase text-stone-400 mb-4 tracking-widest">{d.label} History</p>
+                    {Object.entries(dayData).map(([sId, items]) => (
+                        <div key={sId} className="mb-4 last:mb-0">
+                            <p className="text-[10px] font-black text-amber-600 uppercase mb-2">{suppliers.find(s => s.id === sId)?.name}</p>
+                            <div className="flex flex-wrap gap-2">
+                                {Object.entries(items).map(([itemId, qty]) => (
+                                    <span key={itemId} className="px-3 py-1 bg-white rounded-full text-[10px] font-bold shadow-sm border border-stone-100">{suppliers.find(s => s.id === sId)?.items.find(i => i.id.toString() === itemId)?.name}: {qty}</span>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const AdminView = ({ suppliers, onSave, onLogout, onReset }) => {
     const [mode, setMode] = useState('list');
     const [formData, setFormData] = useState(null);
@@ -291,7 +286,7 @@ const AdminView = ({ suppliers, onSave, onLogout, onReset }) => {
         <div className="space-y-4">
             <div className="flex justify-between items-center px-4 mb-4">
                 <h2 className="font-serif text-2xl">Admin Control</h2>
-                <button onClick={onLogout} className="text-xs font-bold text-red-500 uppercase tracking-widest">Lock</button>
+                <button onClick={onLogout} className="text-xs font-bold text-red-500 uppercase">Lock</button>
             </div>
             <button onClick={onReset} className="w-full p-4 rounded-3xl bg-red-50 text-red-700 font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 border border-red-100 mb-8"><RefreshCw size={14} /> Clear Today's Counts</button>
             {suppliers.map(s => (
@@ -308,12 +303,26 @@ const AdminView = ({ suppliers, onSave, onLogout, onReset }) => {
     );
 };
 
+// === UPDATED SUPPLIER FORM WITH REORDERING ===
 const SupplierForm = ({ initialData, onSave, onCancel }) => {
     const [data, setData] = useState(initialData);
+
+    const moveItem = (index, direction) => {
+        const newItems = [...data.items];
+        const targetIndex = index + direction;
+        if (targetIndex < 0 || targetIndex >= newItems.length) return;
+        
+        const temp = newItems[index];
+        newItems[index] = newItems[targetIndex];
+        newItems[targetIndex] = temp;
+        
+        setData({ ...data, items: newItems });
+    };
+
     return (
       <div className="bg-white rounded-[40px] shadow-2xl p-8">
         <div className="flex justify-between items-center mb-8"><h3 className="font-serif text-2xl">Supplier Profile</h3><X onClick={onCancel} className="w-6 h-6 text-stone-300 cursor-pointer" /></div>
-        <input className="w-full p-5 rounded-3xl bg-stone-50 text-xl mb-6 outline-none border-2 border-transparent focus:border-amber-200 font-serif" placeholder="Name" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
+        <input className="w-full p-5 rounded-3xl bg-stone-50 text-xl mb-6 outline-none border-2 border-transparent focus:border-amber-200 font-serif" placeholder="Supplier Name" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
         <div className="flex flex-wrap gap-2 mb-8">
           {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
             <button key={day} onClick={() => {
@@ -323,18 +332,31 @@ const SupplierForm = ({ initialData, onSave, onCancel }) => {
           ))}
         </div>
         <div className="space-y-3 mb-8">
+          <p className="text-[10px] font-black uppercase text-stone-400 px-2 mb-2">Items & Order</p>
           {data.items?.map((item, i) => (
-            <div key={i} className="flex gap-2">
-              <input className="flex-1 p-4 rounded-2xl bg-stone-50 text-xs font-bold outline-none" placeholder="Item" value={item.name} onChange={e => {
+            <div key={item.id} className="flex gap-2 items-center">
+              <div className="flex flex-col gap-1">
+                <button 
+                  onClick={() => moveItem(i, -1)} 
+                  disabled={i === 0}
+                  className={`p-1 rounded bg-stone-50 ${i === 0 ? 'opacity-20' : 'text-stone-400'}`}
+                ><ChevronUp size={14} /></button>
+                <button 
+                  onClick={() => moveItem(i, 1)} 
+                  disabled={i === data.items.length - 1}
+                  className={`p-1 rounded bg-stone-50 ${i === data.items.length - 1 ? 'opacity-20' : 'text-stone-400'}`}
+                ><ChevronDown size={14} /></button>
+              </div>
+              <input className="flex-1 p-4 rounded-2xl bg-stone-50 text-xs font-bold outline-none border-2 border-transparent focus:border-amber-100" placeholder="Item" value={item.name} onChange={e => {
                 const items = [...data.items]; items[i].name = e.target.value; setData({...data, items});
               }} />
-              <input className="w-20 p-4 rounded-2xl bg-stone-50 text-xs text-center font-bold outline-none" placeholder="Par" value={item.par} onChange={e => {
+              <input className="w-16 p-4 rounded-2xl bg-stone-50 text-xs text-center font-bold outline-none" placeholder="Par" value={item.par} onChange={e => {
                 const items = [...data.items]; items[i].par = e.target.value; setData({...data, items});
               }} />
-              <button onClick={() => { const items = [...data.items]; items.splice(i,1); setData({...data, items}); }} className="text-red-200">×</button>
+              <button onClick={() => { const items = [...data.items]; items.splice(i,1); setData({...data, items}); }} className="p-2 text-red-200">×</button>
             </div>
           ))}
-          <button onClick={() => setData({...data, items: [...(data.items || []), { id: Date.now(), name: '', par: '' }]})} className="text-xs font-black uppercase tracking-widest text-amber-600">+ Add Product</button>
+          <button onClick={() => setData({...data, items: [...(data.items || []), { id: Date.now(), name: '', par: '' }]})} className="text-xs font-black uppercase tracking-widest text-amber-600 mt-2">+ Add Product</button>
         </div>
         <button onClick={() => onSave(data)} className="w-full py-5 bg-stone-900 text-white rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95">Save Supplier</button>
       </div>
