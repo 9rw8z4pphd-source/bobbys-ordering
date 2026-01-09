@@ -17,10 +17,11 @@ import {
   RefreshCw,
   ClipboardCheck,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  AlertCircle
 } from 'lucide-react';
 
-// === FIREBASE CONFIG ===
+// === FIREBASE CONFIG === (Kept same as your setup)
 const firebaseConfig = {
   apiKey: "AIzaSyDL7h0nWWE4YV_IMXO7_gupvf1QUZamHGU",
   authDomain: "bobbys-cafe.firebaseapp.com",
@@ -144,13 +145,142 @@ const CafeOrderingApp = () => {
   );
 };
 
-// ... NavButton, PinPad remain the same ...
-const NavButton = ({ icon: Icon, active, onClick }) => (
-    <button onClick={onClick} className={`p-4 rounded-full transition-all duration-500 ${active ? 'shadow-inner' : ''}`}
-            style={{ backgroundColor: active ? colors.primary : 'transparent', color: active ? '#fff' : colors.primary }}>
-      <Icon className="w-6 h-6" />
-    </button>
-);
+// === UPDATED ORDERS VIEW WITH NON-SCHEDULED BUTTON ===
+const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSave }) => {
+  const [showAllSuppliers, setShowAllSuppliers] = useState(false);
+  const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+  
+  // Filter scheduled ones vs all
+  const scheduledSuppliers = suppliers.filter(s => s.days?.includes(dayName));
+  const activeSuppliers = showAllSuppliers ? suppliers : scheduledSuppliers;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <div className="bg-white/40 p-4 rounded-3xl flex items-center justify-center gap-3 border border-stone-200">
+            <ClipboardCheck className="text-stone-400" size={16} />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500">Inventory Mode</span>
+        </div>
+        
+        <button 
+          onClick={() => setShowAllSuppliers(!showAllSuppliers)}
+          className={`w-full p-4 rounded-3xl border-2 border-dashed flex items-center justify-center gap-2 transition-all active:scale-95 ${
+            showAllSuppliers 
+            ? 'bg-amber-50 border-amber-300 text-amber-700' 
+            : 'bg-stone-50 border-stone-200 text-stone-400'
+          }`}
+        >
+          {showAllSuppliers ? <X size={16}/> : <AlertCircle size={16} />}
+          <span className="text-[10px] font-black uppercase tracking-widest">
+            {showAllSuppliers ? 'Show Scheduled Only' : 'New Non-Scheduled Order'}
+          </span>
+        </button>
+      </div>
+
+      {activeSuppliers.length === 0 && (
+        <div className="text-center py-20 opacity-30 italic font-serif text-stone-500">
+          No scheduled counts for today.<br/>Use the button above for emergency orders.
+        </div>
+      )}
+
+      {activeSuppliers.map(s => {
+        const isCompleted = history[todayKey]?.[s.id];
+        const isNotScheduledToday = !s.days?.includes(dayName);
+
+        return (
+          <div key={s.id} className="rounded-[40px] shadow-xl border-t-8 bg-white p-6 transition-all relative overflow-hidden" 
+               style={{ borderColor: isCompleted ? colors.success : (isNotScheduledToday ? colors.accent : colors.primary) }}>
+            
+            {isNotScheduledToday && (
+                <div className="absolute top-0 right-10 bg-amber-100 px-3 py-1 rounded-b-xl text-[8px] font-black text-amber-700 tracking-tighter uppercase">
+                    Non-Scheduled
+                </div>
+            )}
+
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-serif text-stone-800">{s.name}</h3>
+              <button onClick={() => {
+                const newHistory = { ...history };
+                if (!newHistory[todayKey]) newHistory[todayKey] = {};
+                newHistory[todayKey][s.id] = isCompleted ? null : { done: true, by: staffName };
+                onSave('history', newHistory);
+              }} className="p-4 rounded-full shadow-lg transition-transform active:scale-90" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
+                <CheckCircle2 className={`w-6 h-6 ${isCompleted ? 'text-white' : 'text-stone-300'}`} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {s.items?.map(item => (
+                <div key={item.id} className="flex items-center justify-between p-4 rounded-3xl bg-stone-50 border border-stone-100">
+                  <span className="font-bold text-xs text-stone-500 uppercase">{item.name}</span>
+                  <input type="number" className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
+                    const newQ = { ...quantities };
+                    if (!newQ[todayKey]) newQ[todayKey] = {};
+                    if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
+                    newQ[todayKey][s.id][item.id] = e.target.value;
+                    onSave('quantities', newQ);
+                  }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ... HistoryView, AdminView, SupplierForm, PinPad, NavButton remain identical to previous ...
+const HistoryView = ({ suppliers, history, quantities }) => {
+  const complianceDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + (i - 3));
+    return { key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', { weekday: 'short' }), isToday: i === 3 };
+  });
+  return (
+    <div className="space-y-6">
+      <div className="rounded-[30px] bg-white p-6 shadow-xl text-center">
+        <h2 className="font-serif text-lg mb-4 italic text-stone-600">Compliance Tracking</h2>
+        <div className="flex justify-between px-2">
+          {complianceDays.map(d => {
+            const completedCount = Object.values(history[d.key] || {}).filter(v => v?.done).length;
+            return (
+              <div key={d.key} className="flex flex-col items-center gap-2">
+                <div className={`w-8 h-20 rounded-full relative overflow-hidden ${d.isToday ? 'ring-2 ring-amber-400 ring-offset-2' : ''}`} style={{ backgroundColor: '#F0F0F0' }}>
+                  <div className="absolute bottom-0 w-full rounded-full transition-all duration-700" style={{ height: `${completedCount * 33}%`, backgroundColor: colors.primary }}></div>
+                </div>
+                <span className={`text-[9px] font-black uppercase ${d.isToday ? 'text-amber-600' : 'text-stone-400'}`}>{d.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="space-y-4">
+        {[...complianceDays].reverse().map(d => {
+            const dayData = quantities[d.key];
+            const dayMeta = history[d.key];
+            if (!dayData) return null;
+            return (
+                <div key={d.key} className="p-6 rounded-[30px] bg-white/60 border border-stone-200">
+                    <p className="font-black text-[10px] uppercase text-stone-400 mb-4 tracking-widest">{d.label} History</p>
+                    {Object.entries(dayData).map(([sId, items]) => (
+                        <div key={sId} className="mb-4 last:mb-0">
+                            <div className="flex justify-between items-center mb-2">
+                                <p className="text-[10px] font-black text-amber-600 uppercase">{suppliers.find(s => s.id === sId)?.name}</p>
+                                <span className="text-[9px] bg-white px-2 py-1 rounded-full border text-stone-400 font-bold">BY: {dayMeta?.[sId]?.by || 'System'}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {Object.entries(items).map(([itemId, qty]) => (
+                                    <span key={itemId} className="px-3 py-1 bg-white rounded-full text-[10px] font-bold shadow-sm border border-stone-100">{suppliers.find(s => s.id === sId)?.items.find(i => i.id.toString() === itemId)?.name}: {qty}</span>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const PinPad = ({ pinInput, setPinInput, onAuth }) => {
     const handleDigit = (d) => {
@@ -178,101 +308,6 @@ const PinPad = ({ pinInput, setPinInput, onAuth }) => {
         </div>
       </div>
     );
-};
-
-// ... OrdersView & HistoryView remain the same as previous (no WhatsApp version) ...
-const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSave }) => {
-  const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
-  const todaysSuppliers = suppliers.filter(s => s.days?.includes(dayName));
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white/40 p-4 rounded-3xl flex items-center justify-center gap-3 border border-stone-200">
-        <ClipboardCheck className="text-stone-400" size={16} />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500">Inventory Mode</span>
-      </div>
-      {todaysSuppliers.map(s => {
-        const isCompleted = history[todayKey]?.[s.id];
-        return (
-          <div key={s.id} className="rounded-[40px] shadow-xl border-t-8 bg-white p-6" style={{ borderColor: isCompleted ? colors.success : colors.primary }}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-serif text-stone-800">{s.name}</h3>
-              <button onClick={() => {
-                const newHistory = { ...history };
-                if (!newHistory[todayKey]) newHistory[todayKey] = {};
-                newHistory[todayKey][s.id] = isCompleted ? null : { done: true, by: staffName };
-                onSave('history', newHistory);
-              }} className="p-4 rounded-full shadow-lg" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
-                <CheckCircle2 className={`w-6 h-6 ${isCompleted ? 'text-white' : 'text-stone-300'}`} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              {s.items?.map(item => (
-                <div key={item.id} className="flex items-center justify-between p-4 rounded-3xl bg-stone-50 border border-stone-100">
-                  <span className="font-bold text-xs text-stone-500 uppercase">{item.name}</span>
-                  <input type="number" className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
-                    const newQ = { ...quantities };
-                    if (!newQ[todayKey]) newQ[todayKey] = {};
-                    if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
-                    newQ[todayKey][s.id][item.id] = e.target.value;
-                    onSave('quantities', newQ);
-                  }} />
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-const HistoryView = ({ suppliers, history, quantities }) => {
-  const complianceDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() + (i - 3));
-    return { key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', { weekday: 'short' }), isToday: i === 3 };
-  });
-  return (
-    <div className="space-y-6">
-      <div className="rounded-[30px] bg-white p-6 shadow-xl text-center">
-        <h2 className="font-serif text-lg mb-4 italic text-stone-600">Compliance Tracking</h2>
-        <div className="flex justify-between px-2">
-          {complianceDays.map(d => {
-            const completedCount = Object.values(history[d.key] || {}).filter(v => v?.done).length;
-            return (
-              <div key={d.key} className="flex flex-col items-center gap-2">
-                <div className={`w-8 h-20 rounded-full relative overflow-hidden ${d.isToday ? 'ring-2 ring-amber-400 ring-offset-2' : ''}`} style={{ backgroundColor: '#F0F0F0' }}>
-                  <div className="absolute bottom-0 w-full rounded-full transition-all duration-700" style={{ height: `${completedCount * 33}%`, backgroundColor: colors.primary }}></div>
-                </div>
-                <span className={`text-[9px] font-black uppercase ${d.isToday ? 'text-amber-600' : 'text-stone-400'}`}>{d.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <div className="space-y-4">
-        {[...complianceDays].reverse().map(d => {
-            const dayData = quantities[d.key];
-            if (!dayData) return null;
-            return (
-                <div key={d.key} className="p-6 rounded-[30px] bg-white/60 border border-stone-200">
-                    <p className="font-black text-[10px] uppercase text-stone-400 mb-4 tracking-widest">{d.label} History</p>
-                    {Object.entries(dayData).map(([sId, items]) => (
-                        <div key={sId} className="mb-4 last:mb-0">
-                            <p className="text-[10px] font-black text-amber-600 uppercase mb-2">{suppliers.find(s => s.id === sId)?.name}</p>
-                            <div className="flex flex-wrap gap-2">
-                                {Object.entries(items).map(([itemId, qty]) => (
-                                    <span key={itemId} className="px-3 py-1 bg-white rounded-full text-[10px] font-bold shadow-sm border border-stone-100">{suppliers.find(s => s.id === sId)?.items.find(i => i.id.toString() === itemId)?.name}: {qty}</span>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            );
-        })}
-      </div>
-    </div>
-  );
 };
 
 const AdminView = ({ suppliers, onSave, onLogout, onReset }) => {
@@ -303,22 +338,17 @@ const AdminView = ({ suppliers, onSave, onLogout, onReset }) => {
     );
 };
 
-// === UPDATED SUPPLIER FORM WITH REORDERING ===
 const SupplierForm = ({ initialData, onSave, onCancel }) => {
     const [data, setData] = useState(initialData);
-
     const moveItem = (index, direction) => {
         const newItems = [...data.items];
         const targetIndex = index + direction;
         if (targetIndex < 0 || targetIndex >= newItems.length) return;
-        
         const temp = newItems[index];
         newItems[index] = newItems[targetIndex];
         newItems[targetIndex] = temp;
-        
         setData({ ...data, items: newItems });
     };
-
     return (
       <div className="bg-white rounded-[40px] shadow-2xl p-8">
         <div className="flex justify-between items-center mb-8"><h3 className="font-serif text-2xl">Supplier Profile</h3><X onClick={onCancel} className="w-6 h-6 text-stone-300 cursor-pointer" /></div>
@@ -336,16 +366,8 @@ const SupplierForm = ({ initialData, onSave, onCancel }) => {
           {data.items?.map((item, i) => (
             <div key={item.id} className="flex gap-2 items-center">
               <div className="flex flex-col gap-1">
-                <button 
-                  onClick={() => moveItem(i, -1)} 
-                  disabled={i === 0}
-                  className={`p-1 rounded bg-stone-50 ${i === 0 ? 'opacity-20' : 'text-stone-400'}`}
-                ><ChevronUp size={14} /></button>
-                <button 
-                  onClick={() => moveItem(i, 1)} 
-                  disabled={i === data.items.length - 1}
-                  className={`p-1 rounded bg-stone-50 ${i === data.items.length - 1 ? 'opacity-20' : 'text-stone-400'}`}
-                ><ChevronDown size={14} /></button>
+                <button onClick={() => moveItem(i, -1)} disabled={i === 0} className={`p-1 rounded bg-stone-50 ${i === 0 ? 'opacity-20' : 'text-stone-400'}`}><ChevronUp size={14} /></button>
+                <button onClick={() => moveItem(i, 1)} disabled={i === data.items.length - 1} className={`p-1 rounded bg-stone-50 ${i === data.items.length - 1 ? 'opacity-20' : 'text-stone-400'}`}><ChevronDown size={14} /></button>
               </div>
               <input className="flex-1 p-4 rounded-2xl bg-stone-50 text-xs font-bold outline-none border-2 border-transparent focus:border-amber-100" placeholder="Item" value={item.name} onChange={e => {
                 const items = [...data.items]; items[i].name = e.target.value; setData({...data, items});
@@ -362,5 +384,12 @@ const SupplierForm = ({ initialData, onSave, onCancel }) => {
       </div>
     );
 };
+
+const NavButton = ({ icon: Icon, active, onClick }) => (
+    <button onClick={onClick} className={`p-4 rounded-full transition-all duration-500 ${active ? 'shadow-inner' : ''}`}
+            style={{ backgroundColor: active ? colors.primary : 'transparent', color: active ? '#fff' : colors.primary }}>
+      <Icon className="w-6 h-6" />
+    </button>
+);
 
 export default CafeOrderingApp;
